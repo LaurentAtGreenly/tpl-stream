@@ -106,6 +106,12 @@ function render(template, strategy) {
   let iterable = null;
   let nextChunk = null;
 
+  const drain = () => {
+    const chunk = buffer.join('');
+    if (chunk && controller) controller.enqueue(chunk);
+    buffer.length = 0;
+  };
+
   return new ReadableStream(
     {
       async start(ctrl) {
@@ -119,9 +125,7 @@ function render(template, strategy) {
 
           if (done) {
             if (buffer.length) {
-              const chunk = buffer.join('');
-              if (chunk) controller.enqueue(chunk);
-              buffer.length = 0;
+              drain();
             }
             controller.close();
             break;
@@ -130,9 +134,7 @@ function render(template, strategy) {
           if (typeof value === 'string') {
             buffer.push(value);
             if (buffer.length > 10) {
-              const chunk = buffer.join('');
-              if (chunk) controller.enqueue(chunk);
-              buffer.length = 0;
+              drain();
             }
           } else if (value?.then) {
             if (buffer.length) {
