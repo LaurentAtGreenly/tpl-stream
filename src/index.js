@@ -1,8 +1,10 @@
-export { render, renderAsString, html };
+export { render, renderAsString, html, raw };
 
 const { constructor: GeneratorFunction } = function* () {};
 
 const templateCache = new WeakMap();
+
+const raw = (value) => [value];
 
 const zip = (arr1, arr2) => arr1.map((item, index) => [item, arr2[index]]);
 
@@ -33,7 +35,8 @@ const buildSource = (templateParts, ...values) => {
         return src + `+utils.attributesFragment(arg${i}) + \`${tplPart}\``;
       }
 
-      return src + `+utils.escape(String(arg${i})) + \`${tplPart}\``;
+      const valExpr = typeof value === 'string' ? `arg${i}` : `String(arg${i})`;
+      return src + `+utils.escape(${valExpr}) + \`${tplPart}\``;
     }, `yield \`${first}\``) + ';'
   );
 };
