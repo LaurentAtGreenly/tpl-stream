@@ -55,3 +55,22 @@ test('Stream of strings are not escaped', async ({ eq }) => {
   // prettier-ignore
   eq(htmlString, `<ul><li>item1</li><li>item2</li><li>item3</li></ul>`);
 });
+
+test('AsyncIterable (not an iterator) is inserted', async ({ eq }) => {
+  const iterable = {
+    [Symbol.asyncIterator]() {
+      let i = 0;
+      return {
+        async next() {
+          if (i < 3) {
+            return { value: `<li>item${++i}</li>`, done: false };
+          }
+          return { done: true };
+        },
+      };
+    },
+  };
+
+  const htmlString = await renderAsString(html`<ul>${iterable}</ul>`);
+  eq(htmlString, `<ul><li>item1</li><li>item2</li><li>item3</li></ul>`);
+});

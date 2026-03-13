@@ -75,8 +75,9 @@ function* _render(template) {
       const resolved = yield chunk;
       yield* _render(typeof resolved === 'string' ? [resolved] : resolved);
     } else if (chunk?.[Symbol.asyncIterator]) {
+      const iterator = chunk[Symbol.asyncIterator]();
       while (true) {
-        const { value: resolved, done } = yield chunk.next();
+        const { value: resolved, done } = yield iterator.next();
         if (done === true) {
           break;
         }
@@ -125,6 +126,11 @@ function render(template, strategy) {
 
           if (typeof value === 'string') {
             buffer.push(value);
+            if (buffer.length > 10) {
+              const chunk = buffer.join('');
+              if (chunk) controller.enqueue(chunk);
+              buffer.length = 0;
+            }
           } else if (value?.then) {
             if (buffer.length) {
               const chunk = buffer.join('');

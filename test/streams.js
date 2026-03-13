@@ -37,3 +37,17 @@ test(`Web Stream: handles backpressure`, async ({ eq }) => {
 
   eq(chunks, ['<section>', 'p1</section><section>', 'p2</section><section>', 'p3</section>']);
 });
+
+test('Web Stream: handles backpressure for large number of small strings without Promises', async ({ eq }) => {
+  const template = html`<div>${Array.from({ length: 1000 }, (_, i) => html`<span>${i}</span>`)}</div>`;
+  const stream = render(template, { highWaterMark: 1 });
+  const reader = stream.getReader();
+
+  // Read only once. Backpressure should pause after ~10-11 chunks.
+  const { value, done } = await reader.read();
+
+  eq(value.length < 1000, true);
+  eq(done, false);
+
+  await reader.cancel();
+});
