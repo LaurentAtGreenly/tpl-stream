@@ -65,28 +65,22 @@ const escape = (value) => {
 };
 
 // we use coroutine instead of async iterable to avoid Promise overhead (for perf)
-function* _render(template, controller) {
+function* _render(template) {
   for (const chunk of template) {
     if (typeof chunk === 'string') {
-      controller.enqueue(chunk);
+      yield chunk;
     } else if (chunk?.[Symbol.iterator]) {
-      yield* _render(chunk, controller);
+      yield* _render(chunk);
     } else if (chunk?.then) {
       const resolved = yield chunk;
-      yield* _render(
-        typeof resolved === 'string' ? [resolved] : resolved,
-        controller,
-      );
+      yield* _render(typeof resolved === 'string' ? [resolved] : resolved);
     } else if (chunk?.[Symbol.asyncIterator]) {
       while (true) {
         const { value: resolved, done } = yield chunk.next();
         if (done === true) {
           break;
         }
-        yield* _render(
-          typeof resolved === 'string' ? [resolved] : resolved,
-          controller,
-        );
+        yield* _render(typeof resolved === 'string' ? [resolved] : resolved);
       }
     } else {
       throw new Error('Unsupported chunk');
@@ -102,36 +96,49 @@ function html(templateParts, ...values) {
   return templateCache.get(templateParts)(...values);
 }
 
-function render(template) {
-  return new ReadableStream({
-    start(controller) {
-      const buffer = [];
-      const iterable = _render(template, {
-        enqueue: (val) => buffer.push(val),
-      });
+function render(template, strategy) {
+  const buffer = [];
+  let controller = null;
+  let iterable = null;
+  let nextChunk = null;
 
-      return pump();
+  return new ReadableStream(
+    {
+      async start(ctrl) {
+        controller = ctrl;
+        iterable = _render(template);
+      },
+      async pull() {
+        while (controller.desiredSize > 0) {
+          const { value, done } = iterable.next(nextChunk);
+          nextChunk = null;
 
-      async function pump(chunk) {
-        const { value } = iterable.next(chunk);
-
-        if (value?.then) {
-          if (buffer.length) {
-            controller.enqueue(buffer.join(''));
+          if (done) {
+            if (buffer.length) {
+              const chunk = buffer.join('');
+              if (chunk) controller.enqueue(chunk);
+              buffer.length = 0;
+            }
+            controller.close();
+            break;
           }
-          const asyncChunk = await value;
-          buffer.length = 0;
-          return pump(asyncChunk);
-        }
 
-        if (buffer.length) {
-          controller.enqueue(buffer.join(''));
+          if (typeof value === 'string') {
+            buffer.push(value);
+          } else if (value?.then) {
+            if (buffer.length) {
+              const chunk = buffer.join('');
+              if (chunk) controller.enqueue(chunk);
+              buffer.length = 0;
+            }
+            nextChunk = await value;
+            return;
+          }
         }
-
-        controller.close();
-      }
+      },
     },
-  });
+    strategy,
+  );
 }
 
 async function renderAsString(template) {
