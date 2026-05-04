@@ -1,0 +1,108 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  pull-requests: write
+
+jobs:
+  benchmark:
+    name: Compare with main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: pr
+
+      - uses: actions/checkout@v3
+        with:
+          ref: main
+          path: main
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install benchmark dependencies
+        run: npm i
+        working-directory: pr/benchmark
+
+      - name: Copy benchmark deps to main
+        run: cp -r pr/benchmark/node_modules main/benchmark/node_modules
+
+      - name: Benchmark PR branch
+        run: |
+          node index.js &
+          SERVER_PID=$!
+          until curl -sf http://localhost:3000/tpl-stream > /dev/null; do sleep 0.2; done
+          ./node_modules/.bin/autocannon --json http://localhost:3000/tpl-stream > /tmp/pr.json
+          kill $SERVER_PID
+        working-directory: pr/benchmark
+
+      - name: Benchmark main branch
+        run: |
+          node index.js &
+          SERVER_PID=$!
+          until curl -sf http://localhost:3000/tpl-stream > /dev/null; do sleep 0.2; done
+          ./node_modules/.bin/autocannon --json http://localhost:3000/tpl-stream > /tmp/main.json
+          kill $SERVER_PID
+        working-directory: main/benchmark
+
+      - name: Post benchmark comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const pr = JSON.parse(fs.readFileSync('/tmp/pr.json'));
+            const main = JSON.parse(fs.readFileSync('/tmp/main.json'));
+
+            const fmt = (n) => n.toFixed(1);
+            const delta = (prVal, mainVal, lowerIsBetter = false) => {
+              const pct = ((prVal - mainVal) / mainVal * 100);
+              const improved = lowerIsBetter ? pct < -5 : pct > 5;
+              const regressed = lowerIsBetter ? pct > 5 : pct < -5;
+              const sign = pct > 0 ? '+' : '';
+              const emoji = improved ? ' 🟢' : regressed ? ' 🔴' : ' ⚪';
+              return `${sign}${pct.toFixed(1)}%${emoji}`;
+            };
+
+            const MARKER = '<!-- benchmark-comment -->';
+            const body = [
+              MARKER,
+              '## Benchmark: PR vs `main`',
+              '',
+              '| Metric | `main` | PR | Delta |',
+              '|--------|--------|----|-------|',
+              `| Req/sec (avg) | ${fmt(main.requests.average)} | ${fmt(pr.requests.average)} | ${delta(pr.requests.average, main.requests.average)} |`,
+              `| Latency avg (ms) | ${fmt(main.latency.average)} | ${fmt(pr.latency.average)} | ${delta(pr.latency.average, main.latency.average, true)} |`,
+              `| Throughput (MB/s) | ${fmt(main.throughput.average / 1e6)} | ${fmt(pr.throughput.average / 1e6)} | ${delta(pr.throughput.average, main.throughput.average)} |`,
+              '',
+              '_10s run · 10 connections · 🟢 >+5% · 🔴 >-5% · ⚪ within noise_',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.includes(MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
