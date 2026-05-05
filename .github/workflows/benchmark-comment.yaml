@@ -14,7 +14,7 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     permissions:
       actions: read
-      issues: write
+      pull-requests: write
     steps:
       - name: Download results
         uses: actions/download-artifact@v4
