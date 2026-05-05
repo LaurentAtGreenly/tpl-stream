@@ -31,32 +31,38 @@ function* _render(template, controller) {
 }
 
 function render(template) {
+  const buffer = [];
+  const iterable = _render(template, { enqueue: (val) => buffer.push(val) });
+  let pendingValue;
+
   return new ReadableStream({
-    start(controller) {
-      const buffer = [];
-      const iterable = _render(template, {
-        enqueue: (val) => buffer.push(val),
-      });
+    async pull(controller) {
+      let chunk = pendingValue;
+      pendingValue = undefined;
 
-      return pump();
-
-      async function pump(chunk) {
+      while (true) {
         const { value } = iterable.next(chunk);
+        chunk = undefined;
 
-        if (value?.then) {
+        if (!value?.then) {
           if (buffer.length) {
             controller.enqueue(buffer.join(''));
+            buffer.length = 0;
           }
-          const asyncChunk = await value;
-          buffer.length = 0;
-          return pump(asyncChunk);
+          controller.close();
+          return;
         }
 
         if (buffer.length) {
+          // Deliver buffered content now; resume after consumer reads.
           controller.enqueue(buffer.join(''));
+          buffer.length = 0;
+          pendingValue = await value;
+          return;
         }
 
-        controller.close();
+        // No content to deliver yet — keep advancing.
+        chunk = await value;
       }
     },
   });
