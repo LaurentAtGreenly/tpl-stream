@@ -1,0 +1,81 @@
+name: Benchmark Comment
+
+on:
+  workflow_run:
+    workflows: ["Benchmark Run"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  comment:
+    name: Post benchmark comment
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post benchmark comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const pr = JSON.parse(fs.readFileSync('pr.json'));
+            const main = JSON.parse(fs.readFileSync('main.json'));
+            const prNumber = parseInt(fs.readFileSync('pr-number.txt', 'utf8').trim());
+
+            const fmt = (n) => n.toFixed(1);
+            const delta = (prVal, mainVal, lowerIsBetter = false) => {
+              const pct = ((prVal - mainVal) / mainVal * 100);
+              const improved = lowerIsBetter ? pct < -5 : pct > 5;
+              const regressed = lowerIsBetter ? pct > 5 : pct < -5;
+              const sign = pct > 0 ? '+' : '';
+              const emoji = improved ? ' 🟢' : regressed ? ' 🔴' : ' ⚪';
+              return `${sign}${pct.toFixed(1)}%${emoji}`;
+            };
+
+            const MARKER = '<!-- benchmark-comment -->';
+            const body = [
+              MARKER,
+              '## Benchmark: PR vs `main`',
+              '',
+              '| Metric | `main` | PR | Delta |',
+              '|--------|--------|----|-------|',
+              `| Req/sec (avg) | ${fmt(main.requests.average)} | ${fmt(pr.requests.average)} | ${delta(pr.requests.average, main.requests.average)} |`,
+              `| Latency avg (ms) | ${fmt(main.latency.average)} | ${fmt(pr.latency.average)} | ${delta(pr.latency.average, main.latency.average, true)} |`,
+              `| Throughput (MB/s) | ${fmt(main.throughput.average / 1e6)} | ${fmt(pr.throughput.average / 1e6)} | ${delta(pr.throughput.average, main.throughput.average)} |`,
+              '',
+              '_10s run · 10 connections · 🟢 >+5% · 🔴 >-5% · ⚪ within noise_',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c => c.body.includes(MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }

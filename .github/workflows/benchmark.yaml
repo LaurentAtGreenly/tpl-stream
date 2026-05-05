@@ -1,12 +1,11 @@
-name: Benchmark
+name: Benchmark Run
 
 on:
   pull_request:
     branches:
       - main
 
-permissions:
-  pull-requests: write
+permissions: {}
 
 jobs:
   benchmark:
@@ -51,58 +50,14 @@ jobs:
           kill $SERVER_PID
         working-directory: main/benchmark
 
-      - name: Post benchmark comment
-        uses: actions/github-script@v7
+      - name: Collect results
+        run: |
+          mkdir results
+          cp /tmp/pr.json /tmp/main.json results/
+          echo "${{ github.event.pull_request.number }}" > results/pr-number.txt
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            const pr = JSON.parse(fs.readFileSync('/tmp/pr.json'));
-            const main = JSON.parse(fs.readFileSync('/tmp/main.json'));
-
-            const fmt = (n) => n.toFixed(1);
-            const delta = (prVal, mainVal, lowerIsBetter = false) => {
-              const pct = ((prVal - mainVal) / mainVal * 100);
-              const improved = lowerIsBetter ? pct < -5 : pct > 5;
-              const regressed = lowerIsBetter ? pct > 5 : pct < -5;
-              const sign = pct > 0 ? '+' : '';
-              const emoji = improved ? ' 🟢' : regressed ? ' 🔴' : ' ⚪';
-              return `${sign}${pct.toFixed(1)}%${emoji}`;
-            };
-
-            const MARKER = '<!-- benchmark-comment -->';
-            const body = [
-              MARKER,
-              '## Benchmark: PR vs `main`',
-              '',
-              '| Metric | `main` | PR | Delta |',
-              '|--------|--------|----|-------|',
-              `| Req/sec (avg) | ${fmt(main.requests.average)} | ${fmt(pr.requests.average)} | ${delta(pr.requests.average, main.requests.average)} |`,
-              `| Latency avg (ms) | ${fmt(main.latency.average)} | ${fmt(pr.latency.average)} | ${delta(pr.latency.average, main.latency.average, true)} |`,
-              `| Throughput (MB/s) | ${fmt(main.throughput.average / 1e6)} | ${fmt(pr.throughput.average / 1e6)} | ${delta(pr.throughput.average, main.throughput.average)} |`,
-              '',
-              '_10s run · 10 connections · 🟢 >+5% · 🔴 >-5% · ⚪ within noise_',
-            ].join('\n');
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const existing = comments.find(c => c.body.includes(MARKER));
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+          name: benchmark-results
+          path: results/
