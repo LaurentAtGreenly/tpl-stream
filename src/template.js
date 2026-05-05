@@ -10,24 +10,24 @@ function html(templateParts, ...values) {
   return templateCache.get(templateParts)(...values);
 }
 
+const zip = (a, b) => a.map((item, i) => [item, b[i]]);
+
 const compile = (templateParts, ...values) => {
   const segments = [];
   let syncRun = { type: 'sync', startPart: templateParts[0], ops: [] };
 
-  for (let i = 0; i < values.length; i++) {
-    const value = values[i];
-    const part = templateParts[i + 1];
-
+  for (const [value, part] of zip(values, templateParts.slice(1))) {
     if (value?.[Symbol.iterator] && typeof value !== 'string') {
-      segments.push(syncRun);
-      segments.push({ type: 'iter' });
+      segments.push(syncRun, { type: 'iter' });
       syncRun = { type: 'sync', startPart: part, ops: [] };
     } else if (isAsync(value)) {
-      segments.push(syncRun);
-      segments.push({ type: 'async' });
+      segments.push(syncRun, { type: 'async' });
       syncRun = { type: 'sync', startPart: part, ops: [] };
     } else {
-      syncRun.ops.push({ op: typeof value === 'object' ? 'attributes' : 'escape', part });
+      syncRun.ops.push({
+        op: typeof value === 'object' ? 'attributes' : 'escape',
+        part,
+      });
     }
   }
 
@@ -43,7 +43,10 @@ const compile = (templateParts, ...values) => {
       } else {
         let str = segment.startPart;
         for (const { op, part } of segment.ops) {
-          str += (op === 'attributes' ? attributesFragment(values[vi]) : escape(String(values[vi]))) + part;
+          str +=
+            (op === 'attributes'
+              ? attributesFragment(values[vi])
+              : escape(String(values[vi]))) + part;
           vi++;
         }
         yield str;
