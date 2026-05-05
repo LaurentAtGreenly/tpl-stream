@@ -30,42 +30,47 @@ function* _render(template, controller) {
   }
 }
 
-function render(template) {
+function render(template, { highWaterMark = 1 } = {}) {
   const buffer = [];
   const iterable = _render(template, { enqueue: (val) => buffer.push(val) });
   let pendingValue;
 
-  return new ReadableStream({
-    async pull(controller) {
-      let chunk = pendingValue;
-      pendingValue = undefined;
+  return new ReadableStream(
+    {
+      async pull(controller) {
+        let chunk = pendingValue;
+        pendingValue = undefined;
 
-      while (true) {
-        const { value } = iterable.next(chunk);
-        chunk = undefined;
+        while (true) {
+          const { value } = iterable.next(chunk);
+          chunk = undefined;
 
-        if (!value?.then) {
+          if (!value?.then) {
+            if (buffer.length) {
+              controller.enqueue(buffer.join(''));
+              buffer.length = 0;
+            }
+            controller.close();
+            return;
+          }
+
           if (buffer.length) {
             controller.enqueue(buffer.join(''));
             buffer.length = 0;
+            // Pause when the consumer's buffer is full; keep going while it has capacity.
+            if (controller.desiredSize <= 0) {
+              pendingValue = await value;
+              return;
+            }
           }
-          controller.close();
-          return;
-        }
 
-        if (buffer.length) {
-          // Deliver buffered content now; resume after consumer reads.
-          controller.enqueue(buffer.join(''));
-          buffer.length = 0;
-          pendingValue = await value;
-          return;
+          // No content to deliver yet, or consumer still has capacity — keep advancing.
+          chunk = await value;
         }
-
-        // No content to deliver yet — keep advancing.
-        chunk = await value;
-      }
+      },
     },
-  });
+    { highWaterMark },
+  );
 }
 
 async function renderAsString(template) {

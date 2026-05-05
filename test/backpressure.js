@@ -121,6 +121,36 @@ test('slow consumer receives all data via pipeTo', async ({ eq }) => {
   eq(received.join(''), 'pqr');
 });
 
+test('adapts to desiredSize — fills multiple chunks per pull when highWaterMark > 1', async ({
+  eq,
+}) => {
+  const { iter, nextCalls } = makeTrackedAsyncIter(['a', 'b', 'c', 'd']);
+
+  // highWaterMark: 2 means desiredSize starts at 2, so pull() should keep
+  // producing until it has enqueued 2 chunks, then pause.
+  const stream = render(html`${iter}`, { highWaterMark: 2 });
+  const reader = stream.getReader();
+
+  // Let the initial pull() run to completion (all Promise.resolve microtasks settle).
+  await tick();
+
+  // html`${iter}` has empty static parts ('', ''), so the first enqueued chunk is ''.
+  // desiredSize drops from 2 to 1 — still > 0 — so pull() keeps going and enqueues 'a'.
+  // That requires 2 next() calls (indices 0 and 1) before desiredSize hits 0.
+  // With HWM=1 the same pull() would have stopped after enqueueing '' (1 next() call).
+  eq(
+    nextCalls.length >= 2,
+    true,
+    `expected ≥2 next() calls to fill HWM=2, got ${nextCalls.length}`,
+  );
+
+  // Both chunks are already queued — reads should be immediate.
+  await reader.read(); // '' — empty static part of html`${iter}`
+  eq((await reader.read()).value, 'a');
+
+  while (!(await reader.read()).done) {}
+});
+
 test('sync-only templates are unaffected', async ({ eq }) => {
   const chunks = [];
 
