@@ -1,0 +1,63 @@
+name: Benchmark Run
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  benchmark:
+    name: Compare with main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: pr
+
+      - uses: actions/checkout@v3
+        with:
+          ref: main
+          path: main
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install benchmark dependencies
+        run: npm i
+        working-directory: pr/benchmark
+
+      - name: Copy benchmark deps to main
+        run: cp -r pr/benchmark/node_modules main/benchmark/node_modules
+
+      - name: Benchmark PR branch
+        run: |
+          node index.js &
+          SERVER_PID=$!
+          until curl -sf http://localhost:3000/tpl-stream > /dev/null; do sleep 0.2; done
+          ./node_modules/.bin/autocannon --json http://localhost:3000/tpl-stream > /tmp/pr.json
+          kill $SERVER_PID
+        working-directory: pr/benchmark
+
+      - name: Benchmark main branch
+        run: |
+          node index.js &
+          SERVER_PID=$!
+          until curl -sf http://localhost:3000/tpl-stream > /dev/null; do sleep 0.2; done
+          ./node_modules/.bin/autocannon --json http://localhost:3000/tpl-stream > /tmp/main.json
+          kill $SERVER_PID
+        working-directory: main/benchmark
+
+      - name: Collect results
+        run: |
+          mkdir results
+          cp /tmp/pr.json /tmp/main.json results/
+          echo "${{ github.event.pull_request.number }}" > results/pr-number.txt
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results/
