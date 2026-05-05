@@ -10,40 +10,46 @@ function html(templateParts, ...values) {
   return templateCache.get(templateParts)(...values);
 }
 
-const { constructor: GeneratorFunction } = function* () {};
-
-const zip = (arr1, arr2) => arr1.map((item, index) => [item, arr2[index]]);
-
 const compile = (templateParts, ...values) => {
-  const src = buildSource(templateParts, ...values);
-  const args = [
-    'utils',
-    ...Array.from({ length: values.length }, (_, i) => 'arg' + i),
-  ];
-  const gen = new GeneratorFunction(...args, src);
-  return (...values) => gen({ escape, attributesFragment }, ...values);
-};
+  const segments = [];
+  let syncRun = { type: 'sync', startPart: templateParts[0], ops: [] };
 
-const buildSource = (templateParts, ...values) => {
-  const [first, ...rest] = templateParts;
-  const tuples = zip(rest, values);
-  return (
-    tuples.reduce((src, [tplPart, value], i) => {
-      if (value?.[Symbol.iterator] && typeof value !== 'string') {
-        return src + `;yield *arg${i};yield \`${tplPart}\``;
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i];
+    const part = templateParts[i + 1];
+
+    if (value?.[Symbol.iterator] && typeof value !== 'string') {
+      segments.push(syncRun);
+      segments.push({ type: 'iter' });
+      syncRun = { type: 'sync', startPart: part, ops: [] };
+    } else if (isAsync(value)) {
+      segments.push(syncRun);
+      segments.push({ type: 'async' });
+      syncRun = { type: 'sync', startPart: part, ops: [] };
+    } else {
+      syncRun.ops.push({ op: typeof value === 'object' ? 'attributes' : 'escape', part });
+    }
+  }
+
+  segments.push(syncRun);
+
+  return function* (...values) {
+    let vi = 0;
+    for (const segment of segments) {
+      if (segment.type === 'iter') {
+        yield* values[vi++];
+      } else if (segment.type === 'async') {
+        yield values[vi++];
+      } else {
+        let str = segment.startPart;
+        for (const { op, part } of segment.ops) {
+          str += (op === 'attributes' ? attributesFragment(values[vi]) : escape(String(values[vi]))) + part;
+          vi++;
+        }
+        yield str;
       }
-
-      if (isAsync(value)) {
-        return src + `;yield arg${i}; yield \`${tplPart}\``;
-      }
-
-      if (typeof value === 'object') {
-        return src + `+utils.attributesFragment(arg${i}) + \`${tplPart}\``;
-      }
-
-      return src + `+utils.escape(String(arg${i})) + \`${tplPart}\``;
-    }, `yield \`${first}\``) + ';'
-  );
+    }
+  };
 };
 
 const attributesFragment = (value) =>
