@@ -30,36 +30,44 @@ function* _render(template, controller) {
   }
 }
 
-function render(template) {
-  return new ReadableStream({
-    start(controller) {
-      const buffer = [];
-      const iterable = _render(template, {
-        enqueue: (val) => buffer.push(val),
-      });
+function render(template, { highWaterMark = 1 } = {}) {
+  const buffer = [];
+  const iterable = _render(template, { enqueue: (val) => buffer.push(val) });
+  let pendingValue;
 
-      return pump();
+  return new ReadableStream(
+    {
+      async pull(controller) {
+        const chunk = pendingValue;
+        pendingValue = undefined;
+        return pump(chunk);
 
-      async function pump(chunk) {
-        const { value } = iterable.next(chunk);
+        async function pump(chunk) {
+          const { value, done } = iterable.next(chunk);
 
-        if (value?.then) {
+          if (done) {
+            if (buffer.length) controller.enqueue(buffer.join(''));
+            return controller.close();
+          }
+
+          if (!value?.then) return pump(value);
+
+          // Async boundary: flush buffered content and respect backpressure.
           if (buffer.length) {
             controller.enqueue(buffer.join(''));
+            buffer.length = 0;
+            if (controller.desiredSize <= 0) {
+              pendingValue = await value;
+              return;
+            }
           }
-          const asyncChunk = await value;
-          buffer.length = 0;
-          return pump(asyncChunk);
-        }
 
-        if (buffer.length) {
-          controller.enqueue(buffer.join(''));
+          return pump(await value);
         }
-
-        controller.close();
-      }
+      },
     },
-  });
+    { highWaterMark },
+  );
 }
 
 async function renderAsString(template) {

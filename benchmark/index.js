@@ -9,7 +9,7 @@ import { ejsPlugin } from './ejs/index.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = fastify({
-  logger: true,
+  logger: false,
 });
 
 app.register(fastifyStatic, {
