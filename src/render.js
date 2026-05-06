@@ -38,34 +38,31 @@ function render(template, { highWaterMark = 1 } = {}) {
   return new ReadableStream(
     {
       async pull(controller) {
-        let chunk = pendingValue;
+        const chunk = pendingValue;
         pendingValue = undefined;
+        return pump(chunk);
 
-        while (true) {
-          const { value } = iterable.next(chunk);
-          chunk = undefined;
+        async function pump(chunk) {
+          const { value, done } = iterable.next(chunk);
 
-          if (!value?.then) {
-            if (buffer.length) {
-              controller.enqueue(buffer.join(''));
-              buffer.length = 0;
-            }
-            controller.close();
-            return;
+          if (done) {
+            if (buffer.length) controller.enqueue(buffer.join(''));
+            return controller.close();
           }
 
+          if (!value?.then) return pump(value);
+
+          // Async boundary: flush buffered content and respect backpressure.
           if (buffer.length) {
             controller.enqueue(buffer.join(''));
             buffer.length = 0;
-            // Pause when the consumer's buffer is full; keep going while it has capacity.
             if (controller.desiredSize <= 0) {
               pendingValue = await value;
               return;
             }
           }
 
-          // No content to deliver yet, or consumer still has capacity — keep advancing.
-          chunk = await value;
+          return pump(await value);
         }
       },
     },
