@@ -83,6 +83,8 @@ html`<button ${{disabled: false, ['aria-controls']: 'woot'}}>hello</button>`
 // <button aria-controls="woot">hello</button>
 ```
 
+> **Warning for JavaScript users:** any container value passed as an interpolation is yielded as-is without escaping. TypeScript users get a compile-time error when bypassing ``raw``; plain JavaScript offers no such guard, so take care not to interpolate unsanitised user input inside an Iterable, a Promise or an asyncIterable.
+
 ### render
 
 The ``render`` function takes a template and returns a ``ReadableStream``. Chunks are flushed at every async boundary (Promise or async iterator):
