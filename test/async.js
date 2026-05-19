@@ -41,6 +41,18 @@ test('Stream of templates are inserted', async ({ eq }) => {
   eq(htmlString, `<ul><li>item1</li><li>item2</li><li>item3</li></ul>`);
 });
 
+test('Promise that resolves a number is rendered', async ({ eq }) => {
+  eq(await renderAsString(html`<p>${Promise.resolve(42)}</p>`), `<p>42</p>`);
+});
+
+test('Stream of numbers and booleans are rendered', async ({ eq }) => {
+  const stream = async function* () {
+    yield 42;
+    yield true;
+  };
+  eq(await renderAsString(html`<p>${stream()}</p>`), `<p>42true</p>`);
+});
+
 test('Stream of strings are escaped', async ({ eq }) => {
   const stream = async function* () {
     yield `<li>item1</li>`;

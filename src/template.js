@@ -17,7 +17,11 @@ function* html(templateParts, ...values) {
     if (isSafeHTML(value)) {
       yield safeHTML(value.value + part);
     } else if (value?.[Symbol.iterator] && typeof value !== 'string') {
-      yield* value;
+      yield* Iterator.from(value).map((item) =>
+        typeof item === 'number' || typeof item === 'boolean'
+          ? safeHTML(String(item))
+          : item,
+      );
       yield safeHTML(part);
     } else if (isAsync(value)) {
       yield* [value, safeHTML(part)];

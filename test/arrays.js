@@ -44,6 +44,13 @@ test('arrays of literals are escaped', async ({ eq }) => {
   );
 });
 
+test('arrays of numbers and booleans are rendered', async ({ eq }) => {
+  eq(
+    await renderAsString(html`<p>${[42, true, false]}</p>`),
+    `<p>42truefalse</p>`,
+  );
+});
+
 test('nested arrays of literals are escaped', async ({ eq }) => {
   eq(
     await renderAsString(html`<p>${[['<b>bold</b>']]}</p>`),

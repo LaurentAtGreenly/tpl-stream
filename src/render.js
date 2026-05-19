@@ -12,6 +12,10 @@ function* _render({ template, enqueue }) {
     return enqueue(escape(template));
   }
 
+  if (typeof template === 'number' || typeof template === 'boolean') {
+    return enqueue(String(template));
+  }
+
   for (const chunk of template) {
     if (isSafeHTML(chunk)) {
       enqueue(chunk.value);
