@@ -2,7 +2,7 @@
 
 [![install size](https://packagephobia.com/badge?p=tpl-stream)](https://packagephobia.com/result?p=tpl-stream)
 
-``tpl-stream`` is a Javascript template library that supports streaming. It helps to generate HTML in a server environment, but not only. It runs anywhere, as long as the runtime implements [web streams](https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream).
+``tpl-stream`` is a Javascript template library that supports streaming. It helps to generate HTML in a server environment, but not only. It requires a runtime that implements [web streams](https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream) and [iterator helpers](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Iterator) (Node.js >= 22, modern browsers).
 
 It is very small compared to the alternatives and does not require a build step, while providing [very good performance](./benchmark). More details can be found in [this blog post](https://lorenzofox.dev/posts/html-streaming-part-2/)
 
