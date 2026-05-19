@@ -35,7 +35,7 @@ test('iterable of iterable are inlined', async ({ eq }) => {
   );
 });
 
-test('iterable of literals are NOT escaped', async ({ eq }) => {
+test('iterable of literals are escaped', async ({ eq }) => {
   function* iterable() {
     yield '<script>pwned</script>';
     yield '<li>item 2</li>';
@@ -47,6 +47,6 @@ test('iterable of literals are NOT escaped', async ({ eq }) => {
       // prettier-ignore
       html`<ul>${iterable()}</ul>`,
     ),
-    `<ul><script>pwned</script><li>item 2</li><li>item 3</li></ul>`,
+    `<ul>&lt;script&gt;pwned&lt;/script&gt;&lt;li&gt;item 2&lt;/li&gt;&lt;li&gt;item 3&lt;/li&gt;</ul>`,
   );
 });

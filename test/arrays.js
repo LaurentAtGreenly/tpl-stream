@@ -27,7 +27,7 @@ test('arrays of arrays are inlined', async ({ eq }) => {
   );
 });
 
-test('arrays of literals are NOT escaped', async ({ eq }) => {
+test('arrays of literals are escaped', async ({ eq }) => {
   const ListItem = (value) => value;
   const items = [
     '<script>pwned</script>',
@@ -40,6 +40,13 @@ test('arrays of literals are NOT escaped', async ({ eq }) => {
       // prettier-ignore
       html`<ul>${items.map(ListItem)}</ul>`,
     ),
-    `<ul><script>pwned</script><li>item 2</li><li>item 3</li></ul>`,
+    `<ul>&lt;script&gt;pwned&lt;/script&gt;&lt;li&gt;item 2&lt;/li&gt;&lt;li&gt;item 3&lt;/li&gt;</ul>`,
+  );
+});
+
+test('nested arrays of literals are escaped', async ({ eq }) => {
+  eq(
+    await renderAsString(html`<p>${[['<b>bold</b>']]}</p>`),
+    `<p>&lt;b&gt;bold&lt;/b&gt;</p>`,
   );
 });

@@ -1,7 +1,7 @@
-import { html, raw, render, renderAsString, HTMLTemplate } from '../src/index';
+import { html, raw, render, renderAsString, HTMLTemplate, UnsafeHTML } from '../src/index';
 
 raw: {
-  const wrapped: [string] = raw('<span></span>');
+  const wrapped: UnsafeHTML = raw('<span></span>');
   // @ts-expect-error raw can only be a string
   raw(['foo']);
   // @ts-expect-error unsafe container resolving to string
