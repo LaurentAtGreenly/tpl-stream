@@ -1,14 +1,26 @@
+import { isSafeHTML, escape } from './safe-html.js';
+
 export { render, renderAsString };
 
 // we use coroutine instead of async iterable to avoid Promise overhead (for perf)
 function* _render({ template, enqueue }) {
+  if (isSafeHTML(template)) {
+    return enqueue(template.value);
+  }
+
   if (typeof template === 'string') {
-    return enqueue(template);
+    return enqueue(escape(template));
+  }
+
+  if (typeof template === 'number' || typeof template === 'boolean') {
+    return enqueue(String(template));
   }
 
   for (const chunk of template) {
-    if (typeof chunk === 'string') {
-      enqueue(chunk);
+    if (isSafeHTML(chunk)) {
+      enqueue(chunk.value);
+    } else if (typeof chunk === 'string') {
+      enqueue(escape(chunk));
     } else if (chunk?.[Symbol.iterator]) {
       yield* _render({ template: chunk, enqueue });
     } else if (chunk?.then) {

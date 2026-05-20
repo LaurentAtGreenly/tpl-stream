@@ -1,5 +1,5 @@
-declare const rawBrand: unique symbol;
-export type UnsafeHTML = [string] & { readonly [rawBrand]: true };
+declare const safeHTMLBrand: unique symbol;
+export type UnsafeHTML = { readonly [safeHTMLBrand]: true };
 export declare function raw(value: string): UnsafeHTML;
 
 declare const templateBrand: unique symbol;

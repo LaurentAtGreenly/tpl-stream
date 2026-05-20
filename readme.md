@@ -2,7 +2,7 @@
 
 [![install size](https://packagephobia.com/badge?p=tpl-stream)](https://packagephobia.com/result?p=tpl-stream)
 
-``tpl-stream`` is a Javascript template library that supports streaming. It helps to generate HTML in a server environment, but not only. It runs anywhere, as long as the runtime implements [web streams](https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream).
+``tpl-stream`` is a Javascript template library that supports streaming. It helps to generate HTML in a server environment, but not only. It requires a runtime that implements [web streams](https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream) and [iterator helpers](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Iterator) (Node.js >= 22, modern browsers).
 
 It is very small compared to the alternatives and does not require a build step, while providing [very good performance](./benchmark). More details can be found in [this blog post](https://lorenzofox.dev/posts/html-streaming-part-2/)
 
@@ -43,8 +43,6 @@ import {html, raw, renderAsString} from 'tpl-stream';
 html`<p>${raw('<span>42</span>')}</p>`
 ```
 
-> **Warning for JavaScript users:** any iterable value (e.g. a plain array) passed as an interpolation is yielded as-is without escaping. TypeScript users get a compile-time error when bypassing ``raw``; plain JavaScript offers no such guard, so take care not to interpolate unsanitised user input inside an iterable.
-
 ### Composition
 
 Templates compose by nesting — any interpolated value can itself be a template:
@@ -82,8 +80,6 @@ html`<button ${{disabled: false, ['aria-controls']: 'woot'}}>hello</button>`
 
 // <button aria-controls="woot">hello</button>
 ```
-
-> **Warning for JavaScript users:** any container value passed as an interpolation is yielded as-is without escaping. TypeScript users get a compile-time error when bypassing ``raw``; plain JavaScript offers no such guard, so take care not to interpolate unsanitised user input inside an Iterable, a Promise or an asyncIterable.
 
 ### render
 
