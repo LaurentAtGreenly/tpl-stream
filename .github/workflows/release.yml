@@ -64,7 +64,8 @@ jobs:
           git add package.json
           git commit -m "chore: release ${{ steps.version.outputs.tag }}"
           git tag ${{ steps.version.outputs.tag }}
-          git push origin main --follow-tags
+          git push origin main
+          git push origin ${{ steps.version.outputs.tag }}
 
       - name: Publish to npm
         run: npm publish
